@@ -4,16 +4,18 @@
  * Returns prices with futures already converted to USD
  */
 
-// Current prices - Update these with latest GFEX data
-// Format: SMM Spot in USD, GFEX Futures in CNY (converted automatically)
+// Current prices - Update these with data from SMM and GFEX
+// Last Updated: Based on User Screenshots (Jan 21, 2026)
 const CURRENT_PRICES = {
     carbonate: {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 22704,      // SMM Spot USD/T
-        priceCNY: 158500,  // SMM Spot CNY/T
-        changeCNY: 0,      // Daily change in CNY (scraped)
+        price: 22703.83,   // SMM Spot USD (VAT included)
+        priceCNY: 158500,  // SMM Spot CNY (Original)
+        changeCNY: 6000,   // +6,000
+        changeUSD: 859.45, // +859.45
+        changePercent: 3.93, // +3.93%
         unit: 'USD/T',
     },
     spodumene: {
@@ -21,24 +23,23 @@ const CURRENT_PRICES = {
         name: 'SPODUMENE CONCENTRATE',
         grade: '6.0%',
         price: 2035,
-        changeUSD: 0,      // Daily change in USD (scraped)
         unit: 'USD/T',
         spotOnly: true,
     },
-    // GFEX Lithium Carbonate Futures - Latest prices in CNY
+    // GFEX Lithium Carbonate Futures - Futures Prices in CNY
     futures: [
         { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080 },
         { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600 },
-        { contract: 'LC2604', month: 'Apr-26', priceCNY: 164900 },
-        { contract: 'LC2605', month: 'May-26', priceCNY: 164460 },
-        { contract: 'LC2606', month: 'Jun-26', priceCNY: 166120 },
-        { contract: 'LC2607', month: 'Jul-26', priceCNY: 165020 },
-        { contract: 'LC2608', month: 'Aug-26', priceCNY: 165500 },
+        { contract: 'LC2604', month: 'Apr-26', priceCNY: 166400 },
+        { contract: 'LC2605', month: 'May-26', priceCNY: 166740 },
+        { contract: 'LC2606', month: 'Jun-26', priceCNY: 167200 },
+        { contract: 'LC2607', month: 'Jul-26', priceCNY: 167360 },
+        { contract: 'LC2608', month: 'Aug-26', priceCNY: 167940 },
         { contract: 'LC2609', month: 'Sep-26', priceCNY: 168320 },
-        { contract: 'LC2610', month: 'Oct-26', priceCNY: 166260 },
-        { contract: 'LC2611', month: 'Nov-26', priceCNY: 166480 },
-        { contract: 'LC2612', month: 'Dec-26', priceCNY: 167000 },
-        { contract: 'LC2701', month: 'Jan-27', priceCNY: 167500 },
+        { contract: 'LC2610', month: 'Oct-26', priceCNY: 169280 },
+        { contract: 'LC2611', month: 'Nov-26', priceCNY: 169980 },
+        { contract: 'LC2612', month: 'Dec-26', priceCNY: 169980 },
+        { contract: 'LC2701', month: 'Jan-27', priceCNY: 170000 },
     ],
 };
 
@@ -59,48 +60,40 @@ function calculateChange(current, previous) {
     return ((current - previous) / previous) * 100;
 }
 
-// Helper to calculate percent from absolute change
-function calculatePercentFromChange(currentPrice, absoluteChange) {
-    if (!absoluteChange || absoluteChange === 0) return 0;
-    const previousPrice = currentPrice - absoluteChange;
-    if (previousPrice === 0) return 0;
-    return (absoluteChange / previousPrice) * 100;
-}
-
 function buildResponse(prices, history) {
     const today = getTodayDate();
     const hasValidHistory = history && history.date !== today;
     const conversionRate = calculateConversionRate(prices.carbonate);
 
     // Calculate carbonate changes
-    // Priority: 1. Scraped absolute change (converted to %), 2. History calc
-    let carbonateChange = null;
-    let carbonateChangePercent = null;
+    // Use explicit changePercent if available (scraped), otherwise calculate
+    let carbonateChange = prices.carbonate.changeUSD;
+    let carbonateChangePercent = prices.carbonate.changePercent;
 
-    if (prices.carbonate.changeCNY !== undefined) {
-        // If we have scraped change in CNY
-        // Variation in USD is approx ChangeCNY / Rate
-        carbonateChange = prices.carbonate.changeCNY / conversionRate;
-        // Percent is based on CNY price to avoid currency fluctuation noise
-        carbonateChangePercent = calculatePercentFromChange(prices.carbonate.priceCNY, prices.carbonate.changeCNY);
-    } else if (hasValidHistory && history.carbonate?.price) {
-        carbonateChange = prices.carbonate.price - history.carbonate.price;
-        carbonateChangePercent = calculateChange(prices.carbonate.price, history.carbonate.price);
+    if (carbonateChangePercent === undefined) {
+        if (hasValidHistory && history.carbonate?.price) {
+            carbonateChange = prices.carbonate.price - history.carbonate.price;
+            carbonateChangePercent = calculateChange(prices.carbonate.price, history.carbonate.price);
+        } else if (prices.carbonate.changeCNY) {
+            // Fallback: estimate percent from CNY change
+            const prevCNY = prices.carbonate.priceCNY - prices.carbonate.changeCNY;
+            carbonateChangePercent = (prices.carbonate.changeCNY / prevCNY) * 100;
+            carbonateChange = prices.carbonate.changeCNY / conversionRate;
+        }
     }
 
     // Calculate spodumene changes
-    let spodumeneChange = null;
-    let spodumeneChangePercent = null;
+    let spodumeneChange = prices.spodumene.changeUSD;
+    let spodumeneChangePercent = prices.spodumene.changePercent; // If added later
 
-    if (prices.spodumene.changeUSD !== undefined) {
-        spodumeneChange = prices.spodumene.changeUSD;
-        spodumeneChangePercent = calculatePercentFromChange(prices.spodumene.price, prices.spodumene.changeUSD);
-    } else if (hasValidHistory && history.spodumene?.price) {
-        spodumeneChange = prices.spodumene.price - history.spodumene.price;
-        spodumeneChangePercent = calculateChange(prices.spodumene.price, history.spodumene.price);
+    if (spodumeneChangePercent === undefined) {
+        if (hasValidHistory && history.spodumene?.price) {
+            spodumeneChange = prices.spodumene.price - history.spodumene.price;
+            spodumeneChangePercent = calculateChange(prices.spodumene.price, history.spodumene.price);
+        }
     }
 
-    // Build history map for futures (stored in CNY)
+    // Build history map for futures
     const historyFuturesMap = new Map(
         (history?.futures || []).map(f => [f.contract, f.priceCNY])
     );
@@ -125,13 +118,13 @@ function buildResponse(prices, history) {
     return {
         carbonate: {
             ...prices.carbonate,
-            change: carbonateChange !== null ? Math.round(carbonateChange * 100) / 100 : null,
-            changePercent: carbonateChangePercent !== null ? Math.round(carbonateChangePercent * 100) / 100 : null,
+            change: carbonateChange !== undefined ? Math.round(carbonateChange * 100) / 100 : null,
+            changePercent: carbonateChangePercent !== undefined ? Math.round(carbonateChangePercent * 100) / 100 : null,
         },
         spodumene: {
             ...prices.spodumene,
-            change: spodumeneChange !== null ? Math.round(spodumeneChange * 100) / 100 : null,
-            changePercent: spodumeneChangePercent !== null ? Math.round(spodumeneChangePercent * 100) / 100 : null,
+            change: spodumeneChange !== undefined ? Math.round(spodumeneChange * 100) / 100 : null,
+            changePercent: spodumeneChangePercent !== undefined ? Math.round(spodumeneChangePercent * 100) / 100 : null,
         },
         futures: futuresUSD,
         conversionRate: Math.round(conversionRate * 10000) / 10000,

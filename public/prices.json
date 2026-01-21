@@ -3,97 +3,109 @@
     "id": "carbonate",
     "name": "LITHIUM CARBONATE",
     "grade": "99.5%",
-    "price": 22704,
-    "priceCNY": 164700,
-    "unit": "USD/T",
-    "change": null,
-    "changePercent": null
+    "price": 22703.83,
+    "priceCNY": 158500,
+    "change": 859.45,
+    "changeUSD": 859.45,
+    "changePercent": 3.93,
+    "unit": "USD/T"
   },
   "spodumene": {
     "id": "spodumene",
     "name": "SPODUMENE CONCENTRATE",
     "grade": "6.0%",
     "price": 2035,
+    "change": 0,
+    "changePercent": 0,
     "unit": "USD/T",
-    "spotOnly": true,
-    "change": null,
-    "changePercent": null
+    "spotOnly": true
   },
   "futures": [
     {
       "contract": "LC2602",
       "month": "Feb-26",
       "priceCNY": 165080,
+      "price": 23646,
       "change": null
     },
     {
       "contract": "LC2603",
       "month": "Mar-26",
       "priceCNY": 165600,
+      "price": 23721,
       "change": null
     },
     {
       "contract": "LC2604",
       "month": "Apr-26",
-      "priceCNY": 164900,
+      "priceCNY": 166400,
+      "price": 23835,
       "change": null
     },
     {
       "contract": "LC2605",
       "month": "May-26",
-      "priceCNY": 164460,
+      "priceCNY": 166740,
+      "price": 23884,
       "change": null
     },
     {
       "contract": "LC2606",
       "month": "Jun-26",
-      "priceCNY": 166120,
+      "priceCNY": 167200,
+      "price": 23950,
       "change": null
     },
     {
       "contract": "LC2607",
       "month": "Jul-26",
-      "priceCNY": 165020,
+      "priceCNY": 167360,
+      "price": 23973,
       "change": null
     },
     {
       "contract": "LC2608",
       "month": "Aug-26",
-      "priceCNY": 165500,
+      "priceCNY": 167940,
+      "price": 24056,
       "change": null
     },
     {
       "contract": "LC2609",
       "month": "Sep-26",
       "priceCNY": 168320,
+      "price": 24110,
       "change": null
     },
     {
       "contract": "LC2610",
       "month": "Oct-26",
-      "priceCNY": 166260,
+      "priceCNY": 169280,
+      "price": 24248,
       "change": null
     },
     {
       "contract": "LC2611",
       "month": "Nov-26",
-      "priceCNY": 166480,
+      "priceCNY": 169980,
+      "price": 24348,
       "change": null
     },
     {
       "contract": "LC2612",
       "month": "Dec-26",
-      "priceCNY": 167000,
+      "priceCNY": 169980,
+      "price": 24348,
       "change": null
     },
     {
       "contract": "LC2701",
       "month": "Jan-27",
-      "priceCNY": 167500,
+      "priceCNY": 170000,
+      "price": 24351,
       "change": null
     }
   ],
-  "conversionRate": 7.254228329809725,
-  "lastUpdated": "2026-01-21T14:55:14.060Z",
-  "historyDate": "2026-01-21"
+  "conversionRate": 6.9812,
+  "lastUpdated": "2026-01-21T14:40:00.000Z"
 }
