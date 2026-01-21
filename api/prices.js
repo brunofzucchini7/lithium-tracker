@@ -11,8 +11,9 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 22704,      // SMM Spot USD/T (Exact value from page)
-        priceCNY: 158500,  // SMM Spot CNY/T (Exact value from page)
+        price: 22704,      // SMM Spot USD/T
+        priceCNY: 158500,  // SMM Spot CNY/T
+        changeCNY: 0,      // Daily change in CNY (scraped)
         unit: 'USD/T',
     },
     spodumene: {
@@ -20,11 +21,11 @@ const CURRENT_PRICES = {
         name: 'SPODUMENE CONCENTRATE',
         grade: '6.0%',
         price: 2035,
+        changeUSD: 0,      // Daily change in USD (scraped)
         unit: 'USD/T',
         spotOnly: true,
     },
     // GFEX Lithium Carbonate Futures - Latest prices in CNY
-    // NOTE: These will be updated automatically by the GitHub Action scraper
     futures: [
         { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080 },
         { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600 },
@@ -48,9 +49,8 @@ function getTodayDate() {
     return new Date().toISOString().split('T')[0];
 }
 
-// Calculate true implied rate from the page's values
 function calculateConversionRate(carbonate) {
-    if (!carbonate.price || !carbonate.priceCNY) return 7.0; // Fallback
+    if (!carbonate.price || !carbonate.priceCNY) return 6.98;
     return carbonate.priceCNY / carbonate.price;
 }
 
@@ -59,26 +59,46 @@ function calculateChange(current, previous) {
     return ((current - previous) / previous) * 100;
 }
 
+// Helper to calculate percent from absolute change
+function calculatePercentFromChange(currentPrice, absoluteChange) {
+    if (!absoluteChange || absoluteChange === 0) return 0;
+    const previousPrice = currentPrice - absoluteChange;
+    if (previousPrice === 0) return 0;
+    return (absoluteChange / previousPrice) * 100;
+}
+
 function buildResponse(prices, history) {
     const today = getTodayDate();
     const hasValidHistory = history && history.date !== today;
     const conversionRate = calculateConversionRate(prices.carbonate);
 
     // Calculate carbonate changes
-    const carbonateChange = hasValidHistory && history.carbonate?.price
-        ? prices.carbonate.price - history.carbonate.price
-        : null;
-    const carbonateChangePercent = hasValidHistory && history.carbonate?.price
-        ? calculateChange(prices.carbonate.price, history.carbonate.price)
-        : null;
+    // Priority: 1. Scraped absolute change (converted to %), 2. History calc
+    let carbonateChange = null;
+    let carbonateChangePercent = null;
+
+    if (prices.carbonate.changeCNY !== undefined) {
+        // If we have scraped change in CNY
+        // Variation in USD is approx ChangeCNY / Rate
+        carbonateChange = prices.carbonate.changeCNY / conversionRate;
+        // Percent is based on CNY price to avoid currency fluctuation noise
+        carbonateChangePercent = calculatePercentFromChange(prices.carbonate.priceCNY, prices.carbonate.changeCNY);
+    } else if (hasValidHistory && history.carbonate?.price) {
+        carbonateChange = prices.carbonate.price - history.carbonate.price;
+        carbonateChangePercent = calculateChange(prices.carbonate.price, history.carbonate.price);
+    }
 
     // Calculate spodumene changes
-    const spodumeneChange = hasValidHistory && history.spodumene?.price
-        ? prices.spodumene.price - history.spodumene.price
-        : null;
-    const spodumeneChangePercent = hasValidHistory && history.spodumene?.price
-        ? calculateChange(prices.spodumene.price, history.spodumene.price)
-        : null;
+    let spodumeneChange = null;
+    let spodumeneChangePercent = null;
+
+    if (prices.spodumene.changeUSD !== undefined) {
+        spodumeneChange = prices.spodumene.changeUSD;
+        spodumeneChangePercent = calculatePercentFromChange(prices.spodumene.price, prices.spodumene.changeUSD);
+    } else if (hasValidHistory && history.spodumene?.price) {
+        spodumeneChange = prices.spodumene.price - history.spodumene.price;
+        spodumeneChangePercent = calculateChange(prices.spodumene.price, history.spodumene.price);
+    }
 
     // Build history map for futures (stored in CNY)
     const historyFuturesMap = new Map(
@@ -97,7 +117,7 @@ function buildResponse(prices, history) {
             contract: f.contract,
             month: f.month,
             priceCNY: f.priceCNY,
-            price: priceUSD,  // USD using implied rate
+            price: priceUSD,
             change: changePercent !== null ? Math.round(changePercent * 100) / 100 : null,
         };
     });
