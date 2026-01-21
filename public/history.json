@@ -1,0 +1,61 @@
+{
+  "date": "2026-01-21",
+  "savedAt": "2026-01-21T14:55:14.064Z",
+  "carbonate": {
+    "price": 22704,
+    "priceCNY": 164700
+  },
+  "spodumene": {
+    "price": 2035
+  },
+  "futures": [
+    {
+      "contract": "LC2602",
+      "priceCNY": 165080
+    },
+    {
+      "contract": "LC2603",
+      "priceCNY": 165600
+    },
+    {
+      "contract": "LC2604",
+      "priceCNY": 164900
+    },
+    {
+      "contract": "LC2605",
+      "priceCNY": 164460
+    },
+    {
+      "contract": "LC2606",
+      "priceCNY": 166120
+    },
+    {
+      "contract": "LC2607",
+      "priceCNY": 165020
+    },
+    {
+      "contract": "LC2608",
+      "priceCNY": 165500
+    },
+    {
+      "contract": "LC2609",
+      "priceCNY": 168320
+    },
+    {
+      "contract": "LC2610",
+      "priceCNY": 166260
+    },
+    {
+      "contract": "LC2611",
+      "priceCNY": 166480
+    },
+    {
+      "contract": "LC2612",
+      "priceCNY": 167000
+    },
+    {
+      "contract": "LC2701",
+      "priceCNY": 167500
+    }
+  ]
+}
