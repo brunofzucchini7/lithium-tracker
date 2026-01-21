@@ -1,13 +1,13 @@
 // SMM Lithium Price Data - Fetched from API
-// Uses /api/prices endpoint on Vercel, falls back to static JSON locally
+// Uses /api/prices endpoint which returns USD-converted prices
 
 // Determine API URL based on environment
 const API_URL = import.meta.env.PROD
     ? '/api/prices'
-    : '/prices.json'; // Use static file in development
+    : '/prices.json';
 
 /**
- * Fetch prices from API or static file
+ * Fetch prices from API
  */
 export async function fetchPricesFromAPI() {
     try {
@@ -15,33 +15,10 @@ export async function fetchPricesFromAPI() {
         if (!response.ok) {
             throw new Error(`HTTP error: ${response.status}`);
         }
-        const data = await response.json();
-        return data;
+        return await response.json();
     } catch (error) {
         console.error('Error fetching prices:', error);
         return getDefaultData();
-    }
-}
-
-/**
- * Save history (call API to store today's prices)
- * Only works in production with the API
- */
-export async function saveHistoryToAPI() {
-    if (!import.meta.env.PROD) {
-        console.log('History save only available in production');
-        return false;
-    }
-
-    try {
-        const response = await fetch('/api/prices?action=save-history', {
-            method: 'POST',
-        });
-        const result = await response.json();
-        return result.success;
-    } catch (error) {
-        console.error('Error saving history:', error);
-        return false;
     }
 }
 
@@ -80,25 +57,23 @@ export function isContractExpired(contractCode) {
 }
 
 /**
- * Get active contracts
+ * Get active contracts (filter expired)
  */
 export function getActiveContracts(futures) {
     return futures.filter(c => !isContractExpired(c.contract));
 }
 
 /**
- * Convert futures prices to USD
+ * Get futures contracts for display (already in USD from API)
  */
 export function getFuturesContractsUSD(data) {
-    const conversionRate = getConversionRate(data);
-    const spotUSD = data.carbonate.price;
     const activeContracts = getActiveContracts(data.futures || []);
 
     return [
         {
             contract: 'Spot',
             month: 'Today',
-            price: spotUSD,
+            price: data.carbonate.price,
             change: data.carbonate.changePercent,
             type: 'SMM PHYSICAL SPOT',
             isSpot: true
@@ -106,7 +81,7 @@ export function getFuturesContractsUSD(data) {
         ...activeContracts.map(f => ({
             contract: f.contract,
             month: f.month,
-            price: Math.round(f.priceCNY / conversionRate),
+            price: f.price,  // Already USD from API
             change: f.change,
             type: 'GFEX DERIVATIVE',
             isSpot: false,
@@ -145,6 +120,7 @@ export function formatLastUpdated(isoString) {
  * Default data fallback
  */
 function getDefaultData() {
+    const conversionRate = 7.2543;
     return {
         carbonate: {
             id: 'carbonate',
@@ -167,23 +143,22 @@ function getDefaultData() {
             spotOnly: true,
         },
         futures: [
-            { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080, change: null },
-            { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600, change: null },
-            { contract: 'LC2604', month: 'Apr-26', priceCNY: 164900, change: null },
-            { contract: 'LC2605', month: 'May-26', priceCNY: 164460, change: null },
-            { contract: 'LC2606', month: 'Jun-26', priceCNY: 166120, change: null },
-            { contract: 'LC2607', month: 'Jul-26', priceCNY: 165020, change: null },
-            { contract: 'LC2608', month: 'Aug-26', priceCNY: 165500, change: null },
-            { contract: 'LC2609', month: 'Sep-26', priceCNY: 168320, change: null },
-            { contract: 'LC2610', month: 'Oct-26', priceCNY: 166260, change: null },
-            { contract: 'LC2611', month: 'Nov-26', priceCNY: 166480, change: null },
-            { contract: 'LC2612', month: 'Dec-26', priceCNY: 167000, change: null },
-            { contract: 'LC2701', month: 'Jan-27', priceCNY: 167500, change: null },
+            { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080, price: Math.round(165080 / conversionRate), change: null },
+            { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600, price: Math.round(165600 / conversionRate), change: null },
+            { contract: 'LC2604', month: 'Apr-26', priceCNY: 164900, price: Math.round(164900 / conversionRate), change: null },
+            { contract: 'LC2605', month: 'May-26', priceCNY: 164460, price: Math.round(164460 / conversionRate), change: null },
+            { contract: 'LC2606', month: 'Jun-26', priceCNY: 166120, price: Math.round(166120 / conversionRate), change: null },
+            { contract: 'LC2607', month: 'Jul-26', priceCNY: 165020, price: Math.round(165020 / conversionRate), change: null },
+            { contract: 'LC2608', month: 'Aug-26', priceCNY: 165500, price: Math.round(165500 / conversionRate), change: null },
+            { contract: 'LC2609', month: 'Sep-26', priceCNY: 168320, price: Math.round(168320 / conversionRate), change: null },
+            { contract: 'LC2610', month: 'Oct-26', priceCNY: 166260, price: Math.round(166260 / conversionRate), change: null },
+            { contract: 'LC2611', month: 'Nov-26', priceCNY: 166480, price: Math.round(166480 / conversionRate), change: null },
+            { contract: 'LC2612', month: 'Dec-26', priceCNY: 167000, price: Math.round(167000 / conversionRate), change: null },
+            { contract: 'LC2701', month: 'Jan-27', priceCNY: 167500, price: Math.round(167500 / conversionRate), change: null },
         ],
-        conversionRate: 7.2543,
+        conversionRate: conversionRate,
         lastUpdated: new Date().toISOString(),
     };
 }
 
-// Export default data for initial render
 export const defaultData = getDefaultData();

@@ -1,19 +1,18 @@
 /**
  * Vercel Serverless API - Fetch Lithium Prices
  * 
- * This API endpoint is called by the frontend to get live prices.
- * It stores history in Vercel KV or Edge Config (or falls back to in-memory for demo)
+ * Returns prices with futures already converted to USD
  */
 
 // Current prices - Update these with latest GFEX data
-// In production, you would scrape these from SMM or use their API
+// Format: SMM Spot in USD, GFEX Futures in CNY (converted automatically)
 const CURRENT_PRICES = {
     carbonate: {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 22704,
-        priceCNY: 164700,
+        price: 22704,      // SMM Spot USD/T
+        priceCNY: 164700,  // SMM Spot CNY/T (for conversion rate)
         unit: 'USD/T',
     },
     spodumene: {
@@ -24,7 +23,7 @@ const CURRENT_PRICES = {
         unit: 'USD/T',
         spotOnly: true,
     },
-    // GFEX Lithium Carbonate Futures - Latest prices (Jan 21, 2026)
+    // GFEX Lithium Carbonate Futures - Latest prices in CNY (Jan 21, 2026)
     futures: [
         { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080 },
         { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600 },
@@ -41,8 +40,7 @@ const CURRENT_PRICES = {
     ],
 };
 
-// In-memory history storage (resets on cold start)
-// For persistent storage, use Vercel KV or a database
+// In-memory history storage
 let priceHistory = null;
 
 function getTodayDate() {
@@ -58,9 +56,10 @@ function calculateChange(current, previous) {
     return ((current - previous) / previous) * 100;
 }
 
-function buildPricesWithChanges(prices, history) {
+function buildResponse(prices, history) {
     const today = getTodayDate();
     const hasValidHistory = history && history.date !== today;
+    const conversionRate = calculateConversionRate(prices.carbonate);
 
     // Calculate carbonate changes
     const carbonateChange = hasValidHistory && history.carbonate?.price
@@ -78,10 +77,27 @@ function buildPricesWithChanges(prices, history) {
         ? calculateChange(prices.spodumene.price, history.spodumene.price)
         : null;
 
-    // Build history map for futures
+    // Build history map for futures (stored in CNY)
     const historyFuturesMap = new Map(
         (history?.futures || []).map(f => [f.contract, f.priceCNY])
     );
+
+    // Convert futures to USD and calculate changes
+    const futuresUSD = prices.futures.map(f => {
+        const priceUSD = Math.round(f.priceCNY / conversionRate);
+        const historyPriceCNY = historyFuturesMap.get(f.contract);
+        const changePercent = hasValidHistory && historyPriceCNY
+            ? calculateChange(f.priceCNY, historyPriceCNY)
+            : null;
+
+        return {
+            contract: f.contract,
+            month: f.month,
+            priceCNY: f.priceCNY,
+            price: priceUSD,  // USD price for display
+            change: changePercent !== null ? Math.round(changePercent * 100) / 100 : null,
+        };
+    });
 
     return {
         carbonate: {
@@ -94,15 +110,8 @@ function buildPricesWithChanges(prices, history) {
             change: spodumeneChange !== null ? Math.round(spodumeneChange * 100) / 100 : null,
             changePercent: spodumeneChangePercent !== null ? Math.round(spodumeneChangePercent * 100) / 100 : null,
         },
-        futures: prices.futures.map(f => {
-            const historyPrice = historyFuturesMap.get(f.contract);
-            const changePercent = hasValidHistory ? calculateChange(f.priceCNY, historyPrice) : null;
-            return {
-                ...f,
-                change: changePercent !== null ? Math.round(changePercent * 100) / 100 : null,
-            };
-        }),
-        conversionRate: calculateConversionRate(prices.carbonate),
+        futures: futuresUSD,
+        conversionRate: Math.round(conversionRate * 10000) / 10000,
         lastUpdated: new Date().toISOString(),
         historyDate: history?.date || null,
     };
@@ -118,7 +127,7 @@ export default function handler(req, res) {
         return res.status(200).end();
     }
 
-    // POST request to save history (called once daily)
+    // POST: Save history
     if (req.method === 'POST' && req.query.action === 'save-history') {
         priceHistory = {
             date: getTodayDate(),
@@ -138,8 +147,7 @@ export default function handler(req, res) {
         return res.status(200).json({ success: true, date: priceHistory.date });
     }
 
-    // GET request - return prices with changes
-    const prices = buildPricesWithChanges(CURRENT_PRICES, priceHistory);
-
-    return res.status(200).json(prices);
+    // GET: Return prices
+    const response = buildResponse(CURRENT_PRICES, priceHistory);
+    return res.status(200).json(response);
 }
