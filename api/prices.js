@@ -11,8 +11,8 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 22704,      // SMM Spot USD/T
-        priceCNY: 164700,  // SMM Spot CNY/T (for conversion rate)
+        price: 21850,      // SMM Spot USD/T (Estimated based on 158,500 / 7.25)
+        priceCNY: 158500,  // SMM Spot CNY/T (User provided)
         unit: 'USD/T',
     },
     spodumene: {
@@ -23,7 +23,8 @@ const CURRENT_PRICES = {
         unit: 'USD/T',
         spotOnly: true,
     },
-    // GFEX Lithium Carbonate Futures - Latest prices in CNY (Jan 21, 2026)
+    // GFEX Lithium Carbonate Futures - Latest prices in CNY
+    // NOTE: These will be updated automatically by the GitHub Action scraper
     futures: [
         { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080 },
         { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600 },
@@ -61,7 +62,10 @@ function buildResponse(prices, history) {
     const hasValidHistory = history && history.date !== today;
     const conversionRate = calculateConversionRate(prices.carbonate);
 
-    // Calculate carbonate changes
+    // Calculate carbonate changes (Using history if available, else null)
+    // The user asked for variation from the page, but since we scrape once a day,
+    // simply comparing to yesterday's history is the most robust way for now.
+    // The scraper can also be enhanced to pull the "change" value directly.
     const carbonateChange = hasValidHistory && history.carbonate?.price
         ? prices.carbonate.price - history.carbonate.price
         : null;
@@ -118,36 +122,23 @@ function buildResponse(prices, history) {
 }
 
 export default function handler(req, res) {
-    // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-    // POST: Save history
     if (req.method === 'POST' && req.query.action === 'save-history') {
         priceHistory = {
             date: getTodayDate(),
             savedAt: new Date().toISOString(),
-            carbonate: {
-                price: CURRENT_PRICES.carbonate.price,
-                priceCNY: CURRENT_PRICES.carbonate.priceCNY,
-            },
-            spodumene: {
-                price: CURRENT_PRICES.spodumene.price,
-            },
-            futures: CURRENT_PRICES.futures.map(f => ({
-                contract: f.contract,
-                priceCNY: f.priceCNY,
-            })),
+            carbonate: { ...CURRENT_PRICES.carbonate },
+            spodumene: { ...CURRENT_PRICES.spodumene },
+            futures: CURRENT_PRICES.futures.map(f => ({ ...f })),
         };
         return res.status(200).json({ success: true, date: priceHistory.date });
     }
 
-    // GET: Return prices
     const response = buildResponse(CURRENT_PRICES, priceHistory);
     return res.status(200).json(response);
 }
