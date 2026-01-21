@@ -2,7 +2,7 @@
  * SMM Price Fetcher using Puppeteer
  * 
  * Scrapes real-time data from metal.com using a headless browser.
- * This is robust against client-side rendering.
+ * Robustly extracts BOTH USD and CNY prices to calculate implied rate.
  */
 
 const fs = require('fs');
@@ -34,38 +34,35 @@ async function fetchPrices() {
         // Extract Data
         const data = await page.evaluate(() => {
             const result = {
-                carbonatePrice: null,
-                carbonatePriceCNY: null,
-                spodumenePrice: null,
+                carbonatePrice: null,    // USD
+                carbonatePriceCNY: null, // CNY
                 futures: []
             };
 
-            // Helper to find text in rows
             const rows = Array.from(document.querySelectorAll('tr'));
 
             rows.forEach(row => {
                 const text = row.innerText.toLowerCase();
 
                 // 1. Spot Lithium Carbonate
+                // The table typically has multiple columns like [Name, Price, Change, High, Low, Average, etc.]
+                // We need to be smart about extracting both currencies if they appear, or deducing based on magnitude
                 if (text.includes('lithium carbonate') && text.includes('99.5')) {
                     const cells = Array.from(row.querySelectorAll('td'));
-                    // Usually Price is in 2nd or 3rd column
-                    // We look for numbers > 1000
                     const values = cells.map(c => parseFloat(c.innerText.replace(/,/g, ''))).filter(v => !isNaN(v) && v > 1000);
 
-                    // Heuristic: CNY is usually ~100k+, USD is ~15k+
                     values.forEach(v => {
+                        // CNY values are usually > 100,000
                         if (v > 100000) result.carbonatePriceCNY = v;
+                        // USD values are usually between 10,000 and 50,000
                         else if (v > 10000 && v < 50000) result.carbonatePrice = v;
                     });
                 }
 
                 // 2. GFEX Futures (LC contracts)
-                // Look for pattern LC26xx or LC27xx
                 if (text.match(/lc2\d{3}/)) {
                     const cells = Array.from(row.querySelectorAll('td'));
-                    const contractCode = cells[0]?.innerText.trim(); // First cell is usually contract code
-                    // Price is usually next
+                    const contractCode = cells[0]?.innerText.trim();
                     const price = parseFloat(cells[1]?.innerText.replace(/,/g, ''));
 
                     if (contractCode && !isNaN(price)) {
@@ -97,12 +94,15 @@ function updateFile(data) {
     let content = fs.readFileSync(API_FILE, 'utf8');
     let updated = false;
 
+    // Update CNY Price
     if (data.carbonatePriceCNY) {
         console.log(`Updating Carbonate CNY: ${data.carbonatePriceCNY}`);
         content = content.replace(/priceCNY:\s*\d+/, `priceCNY: ${data.carbonatePriceCNY}`);
         updated = true;
     }
 
+    // Update USD Price
+    // IMPORTANT: This allows us to maintain the dynamic conversion rate based on the page's values
     if (data.carbonatePrice) {
         console.log(`Updating Carbonate USD: ${data.carbonatePrice}`);
         content = content.replace(/price:\s*\d+/, `price: ${data.carbonatePrice}`);
@@ -110,23 +110,13 @@ function updateFile(data) {
     }
 
     // Update Futures
-    // This is tricky with regex, so we'll do a simple replacement for specific known contracts
-    // or regenerate the whole futures block if needed.
-    // For now, let's update specific contracts if found
     if (data.futures && data.futures.length > 0) {
         data.futures.forEach(f => {
-            const regex = new RegExp(`contract:\\s*'${f.contract}',\\s*month:\\s*'[^']+',\\s*priceCNY:\\s*\\d+`);
-            if (regex.test(content)) {
-                // We found the line, but we need to keep the month.
-                // Let's Replace just the price part for that contract
-                // Find: { contract: 'LC2602', ... priceCNY: 123456 }
-                // We assume consistent formatting from our file
-                const updateRegex = new RegExp(`(contract:\\s*'${f.contract}'.*?priceCNY:\\s*)(\\d+)`, 's');
-                if (updateRegex.test(content)) {
-                    content = content.replace(updateRegex, `$1${f.priceCNY}`);
-                    console.log(`Updated ${f.contract} to ${f.priceCNY}`);
-                    updated = true;
-                }
+            const updateRegex = new RegExp(`(contract:\\s*'${f.contract}'.*?priceCNY:\\s*)(\\d+)`, 's');
+            if (updateRegex.test(content)) {
+                content = content.replace(updateRegex, `$1${f.priceCNY}`);
+                // console.log(`Updated ${f.contract} to ${f.priceCNY}`); 
+                updated = true;
             }
         });
     }

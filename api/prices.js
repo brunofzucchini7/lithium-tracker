@@ -11,8 +11,8 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 21850,      // SMM Spot USD/T (Estimated based on 158,500 / 7.25)
-        priceCNY: 158500,  // SMM Spot CNY/T (User provided)
+        price: 22704,      // SMM Spot USD/T (Exact value from page)
+        priceCNY: 158500,  // SMM Spot CNY/T (Exact value from page)
         unit: 'USD/T',
     },
     spodumene: {
@@ -48,7 +48,9 @@ function getTodayDate() {
     return new Date().toISOString().split('T')[0];
 }
 
+// Calculate true implied rate from the page's values
 function calculateConversionRate(carbonate) {
+    if (!carbonate.price || !carbonate.priceCNY) return 7.0; // Fallback
     return carbonate.priceCNY / carbonate.price;
 }
 
@@ -62,10 +64,7 @@ function buildResponse(prices, history) {
     const hasValidHistory = history && history.date !== today;
     const conversionRate = calculateConversionRate(prices.carbonate);
 
-    // Calculate carbonate changes (Using history if available, else null)
-    // The user asked for variation from the page, but since we scrape once a day,
-    // simply comparing to yesterday's history is the most robust way for now.
-    // The scraper can also be enhanced to pull the "change" value directly.
+    // Calculate carbonate changes
     const carbonateChange = hasValidHistory && history.carbonate?.price
         ? prices.carbonate.price - history.carbonate.price
         : null;
@@ -98,7 +97,7 @@ function buildResponse(prices, history) {
             contract: f.contract,
             month: f.month,
             priceCNY: f.priceCNY,
-            price: priceUSD,  // USD price for display
+            price: priceUSD,  // USD using implied rate
             change: changePercent !== null ? Math.round(changePercent * 100) / 100 : null,
         };
     });
