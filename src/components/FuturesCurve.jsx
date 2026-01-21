@@ -27,6 +27,12 @@ function FuturesCurve({ chartData }) {
     const labels = chartData.map(d => d.label);
     const prices = chartData.map(d => d.price);
 
+    // Calculate range to determine step size
+    const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
+    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+    const range = maxPrice - minPrice;
+    const stepSize = range <= 5000 ? 500 : 1000;
+
     const data = {
         labels,
         datasets: [
@@ -110,7 +116,8 @@ function FuturesCurve({ chartData }) {
                     font: {
                         size: 11,
                     },
-                    callback: (value) => `$${(value / 1000).toFixed(0)},000`,
+                    stepSize: stepSize,
+                    callback: (value) => `$${value.toLocaleString()}`,
                 },
                 border: {
                     display: false,
