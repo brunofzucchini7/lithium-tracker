@@ -2,10 +2,7 @@
  * SMM Price Fetcher using Puppeteer
  * 
  * Scrapes real-time data from metal.com using a headless browser.
- * Extracts:
- * 1. Carbonate USD (VAT included) & Change
- * 2. Carbonate CNY (Original) & Change
- * 3. GFEX Futures Curve
+ * Targeting specific "VAT included" (USD) and "Original" (CNY) prices.
  */
 
 const fs = require('fs');
@@ -32,52 +29,114 @@ async function fetchPrices() {
         // Extract Data
         const data = await page.evaluate(() => {
             const result = {
-                carbonate: { price: null, changeUSD: null, priceCNY: null, changeCNY: null },
+                carbonate: { price: null, changeUSD: null, changePercent: null, priceCNY: null, changeCNY: null },
+                spodumene: { price: null, changeUSD: null, changePercent: null },
                 futures: []
             };
 
-            const textNodes = document.body.innerText.toLowerCase();
+            const debug = [];
 
-            // Strategy: Look for specific patterns in the text content usually found in SMM's price cards
-            // The screenshot shows "VAT included ... 22,703.83 ... +859.45"
-            // and "Original ... 158,500 ... +6,000"
+            // Helper to parse numbers like "22,703.83" or "+859.45"
+            const parseNum = (str) => {
+                if (!str) return null;
+                const clean = str.replace(/[^\d.-]/g, '');
+                return parseFloat(clean);
+            };
 
-            // We'll iterate through all elements that might contain this info
-            // A more robust way than just text regex is to look for the price block containers
+            // 1. Find Price Cards (VAT included / Original)
+            // We look for elements containing specific label text
+            const allElements = Array.from(document.querySelectorAll('div, span, p, h3, h4, h5, h6'));
 
-            const priceBlocks = Array.from(document.querySelectorAll('div, span, p'));
+            allElements.forEach(el => {
+                const text = el.innerText ? el.innerText.trim() : '';
 
-            let foundUSD = false;
-            let foundCNY = false;
+                // Carbonate Detection
+                // We assume Carbonate cards are near a "Lithium Carbonate" header, but identifying that relation across DOM is hard without structure
+                // However, "Original 158,500" is very unique to Carbonate. "VAT included" might appear for Spodumene too.
+                // To distinguish, we need to check if we are in the "Lithium Carbonate" section or "Spodumene" section.
+                // Heuristic: check if any parent or nearby element mentions the product name.
 
-            // Helper to clean price string
-            const parseNum = (str) => parseFloat(str.replace(/,/g, '').trim());
+                // A safer, more generic approach: Look for row/card structure
+                // Let's iterate over parents that have text content
 
-            // 1. Carbonate Spot
-            // We look for the section first
-            // This is heuristic-based because we don't have the exact DOM structure
-            // But we can look for "VAT included" and "Original" near "Lithium Carbonate"
+                // CARBONATE LOGIC (Targeting specific text)
+                if (text === 'VAT included') {
+                    const container = el.parentElement;
+                    if (container) {
+                        const fullText = container.innerText; // "VAT included 22,703.83 USD/mt +859.45(+3.93%)"
 
-            // Fallback: iterate rows if it's a table
+                        // Check if this card belongs to Carbonate or Spodumene
+                        // We treat Carbonate as the primary one found first usually, or we check price range
+                        const priceMatch = fullText.match(/([\d,]+\.?\d*)\s*USD\/mt/);
+
+                        if (priceMatch && priceMatch[1]) {
+                            const val = parseNum(priceMatch[1]);
+                            // Carbonate ~10000-50000, Spodumene ~500-4000
+                            if (val > 10000) {
+                                // Carbonate
+                                result.carbonate.price = val;
+                                const changeMatch = fullText.match(/([+-][\d,]+\.?\d*)\(/);
+                                const percentMatch = fullText.match(/\(([+-]?[\d,]+\.?\d*)%\)/);
+                                if (changeMatch) result.carbonate.changeUSD = parseNum(changeMatch[1]);
+                                if (percentMatch) result.carbonate.changePercent = parseNum(percentMatch[1]);
+                            } else if (val < 5000) {
+                                // Spodumene
+                                result.spodumene.price = val;
+                                const changeMatch = fullText.match(/([+-][\d,]+\.?\d*)\(/);
+                                const percentMatch = fullText.match(/\(([+-]?[\d,]+\.?\d*)%\)/);
+                                if (changeMatch) result.spodumene.changeUSD = parseNum(changeMatch[1]);
+                                if (percentMatch) result.spodumene.changePercent = parseNum(percentMatch[1]);
+                            }
+                        }
+                    }
+                }
+
+                // CARBONATE CNY (Original)
+                if (text === 'Original') {
+                    const container = el.parentElement;
+                    if (container) {
+                        const fullText = container.innerText; // "Original 158,500 CNY/mt +6,000(+3.93%)"
+
+                        const priceMatch = fullText.match(/([\d,]+\.?\d*)\s*CNY\/mt/);
+                        if (priceMatch && priceMatch[1]) {
+                            const val = parseNum(priceMatch[1]);
+                            if (val > 100000) {
+                                result.carbonate.priceCNY = val;
+                                const changeMatch = fullText.match(/([+-][\d,]+\.?\d*)\(/);
+                                if (changeMatch) result.carbonate.changeCNY = parseNum(changeMatch[1]);
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Fallback: Table Scanning
+            if (!result.carbonate.price || !result.spodumene.price) {
+                const rows = Array.from(document.querySelectorAll('tr'));
+                rows.forEach(row => {
+                    const rowText = row.innerText.toLowerCase();
+                    if (rowText.includes('lithium carbonate') && rowText.includes('99.5')) {
+                        const cells = Array.from(row.querySelectorAll('td'));
+                        cells.forEach(cell => {
+                            const val = parseNum(cell.innerText);
+                            if (val > 100000) result.carbonate.priceCNY = val;
+                            else if (val > 10000 && val < 50000) result.carbonate.price = val;
+                        });
+                    }
+                    if (rowText.includes('spodumene') && rowText.includes('6')) {
+                        const cells = Array.from(row.querySelectorAll('td'));
+                        cells.forEach(cell => {
+                            const val = parseNum(cell.innerText);
+                            if (val > 500 && val < 5000) result.spodumene.price = val;
+                        });
+                    }
+                });
+            }
+
+            // 3. Futures (LC Contracts)
             const rows = Array.from(document.querySelectorAll('tr'));
             rows.forEach(row => {
                 const rowText = row.innerText.toLowerCase();
-                if (rowText.includes('lithium carbonate') && rowText.includes('99.5')) {
-                    // Analyze cells
-                    const cells = Array.from(row.querySelectorAll('td'));
-
-                    // If it's the detailed view table (often not the main card)
-                    // We might need to look for specific values that look like prices
-                    cells.forEach(cell => {
-                        const val = parseNum(cell.innerText);
-                        if (!isNaN(val)) {
-                            if (val > 100000) result.carbonate.priceCNY = val;
-                            else if (val > 10000 && val < 50000) result.carbonate.price = val;
-                        }
-                    });
-                }
-
-                // Futures
                 if (rowText.match(/lc2\d{3}/)) {
                     const cells = Array.from(row.querySelectorAll('td'));
                     const contract = cells[0]?.innerText.trim();
@@ -87,16 +146,6 @@ async function fetchPrices() {
                     }
                 }
             });
-
-            // 2. Specific Logic for the "VAT Included" / "Original" Cards (seen in screenshot)
-            // These often appear as labels "VAT included" followed by price
-            // We try to find elements containing these texts
-
-            // Basic text search if table scrape failed or to get changes
-            // NOTE: This is a placeholder for the exact DOM selector which is hard to guess
-            // without being able to inspect. But identifying the labels is key.
-
-            // Note: We leave the change extraction to the regex fallback if table structure isn't perfect
 
             return result;
         });
@@ -120,23 +169,60 @@ function updateFile(data) {
 
     // Helper to replace values
     const replaceValue = (key, value) => {
-        const regex = new RegExp(`${key}:\\s*-?\\d+(\\.\\d+)?`);
-        if (regex.test(content) && value !== null && value !== undefined) {
+        const regex = new RegExp(`${key}:\\s*-?[\\d,]+(\\.\\d+)?`);
+        if (regex.test(content) && value !== null && value !== undefined && !isNaN(value)) {
             content = content.replace(regex, `${key}: ${value}`);
             updated = true;
         }
     };
 
-    replaceValue('priceCNY', data.carbonate.priceCNY);
-    replaceValue('price', data.carbonate.price);
-    replaceValue('changeCNY', data.carbonate.changeCNY);
-    replaceValue('changeUSD', data.carbonate.changeUSD);
+    // Carbonate
+    if (data.carbonate.priceCNY) replaceValue('priceCNY', data.carbonate.priceCNY);
+    if (data.carbonate.price) replaceValue('price', data.carbonate.price);
+    if (data.carbonate.changeCNY !== null) replaceValue('changeCNY', data.carbonate.changeCNY);
+    if (data.carbonate.changeUSD !== null) replaceValue('changeUSD', data.carbonate.changeUSD);
+    if (data.carbonate.changePercent !== null) replaceValue('changePercent', data.carbonate.changePercent);
+
+    // Spodumene (We need to ensure these keys exist in the file first to be replaceable)
+    // We'll trust the current file structure has these keys roughly in place
+    // But wait, Spodumene block might have duplicate keys like 'price', 'changeUSD', etc.
+    // The regex above matches GLOBAL first occurence or specific context?
+    // It matches the first one found! This is bad if keys are duplicated.
+    // We need context-aware replacement.
+
+    // Better replacement strategy:
+    const replaceInBlock = (blockName, key, value) => {
+        // Find the block:  blockName: { ... }
+        const blockRegex = new RegExp(`(${blockName}:\\s*\\{[^}]*?)(${key}:\\s*)([\\d,.-]+)`, 's');
+        if (blockRegex.test(content) && value !== null && value !== undefined) {
+            // content = content.replace(blockRegex, `$1${key}: ${value}`);
+            // The above is tricky with groups. Let's use a function replacer or simpler split
+            // Actually, let's just use exact match with enough context
+            // e.g. "spodumene: { ... price: 2035"
+
+            // Using a function to only replace inside the specific match
+            content = content.replace(blockRegex, (match, prefix, label, oldVal) => {
+                return `${prefix}${label}${value}`;
+            });
+            updated = true;
+        }
+    };
+
+    // Carbonate
+    replaceInBlock('carbonate', 'priceCNY', data.carbonate.priceCNY);
+    replaceInBlock('carbonate', 'price', data.carbonate.price);
+    replaceInBlock('carbonate', 'changeCNY', data.carbonate.changeCNY);
+    replaceInBlock('carbonate', 'changeUSD', data.carbonate.changeUSD);
+    replaceInBlock('carbonate', 'changePercent', data.carbonate.changePercent);
+
+    // Spodumene
+    replaceInBlock('spodumene', 'price', data.spodumene.price);
+    replaceInBlock('spodumene', 'changeUSD', data.spodumene.changeUSD);
+    replaceInBlock('spodumene', 'changePercent', data.spodumene.changePercent);
 
     // Futures
     if (data.futures && data.futures.length > 0) {
         data.futures.forEach(f => {
-            // Look for: { contract: 'LCxxxx', ... priceCNY: 12345 }
-            // We need to match the block correctly
             const updateRegex = new RegExp(`(contract:\\s*'${f.contract}'.*?priceCNY:\\s*)(\\d+)`, 's');
             if (updateRegex.test(content)) {
                 content = content.replace(updateRegex, `$1${f.priceCNY}`);

@@ -23,6 +23,8 @@ const CURRENT_PRICES = {
         name: 'SPODUMENE CONCENTRATE',
         grade: '6.0%',
         price: 2035,
+        changeUSD: 0,      // Daily change in USD (scraped)
+        changePercent: 0,  // Daily change percent (scraped)
         unit: 'USD/T',
         spotOnly: true,
     },
