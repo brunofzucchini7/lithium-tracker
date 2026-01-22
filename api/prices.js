@@ -11,11 +11,11 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 22703.83,   // SMM Spot USD (VAT included)
+        price: 20855.45,   // SMM Spot USD (Battery-Grade)
         priceCNY: 158500,  // SMM Spot CNY (Original)
         changeCNY: 6000,   // +6,000
-        changeUSD: 859.45, // +859.45
-        changePercent: 3.93, // +3.93%
+        changeUSD: 763.56, // +763.56
+        changePercent: 3.80, // +3.80%
         unit: 'USD/T',
     },
     spodumene: {
@@ -30,18 +30,18 @@ const CURRENT_PRICES = {
     },
     // GFEX Lithium Carbonate Futures - Futures Prices in CNY
     futures: [
-        { contract: 'LC2602', month: 'Feb-26', priceCNY: 165080 },
-        { contract: 'LC2603', month: 'Mar-26', priceCNY: 165600 },
-        { contract: 'LC2604', month: 'Apr-26', priceCNY: 166400 },
-        { contract: 'LC2605', month: 'May-26', priceCNY: 166740 },
-        { contract: 'LC2606', month: 'Jun-26', priceCNY: 167200 },
-        { contract: 'LC2607', month: 'Jul-26', priceCNY: 167360 },
-        { contract: 'LC2608', month: 'Aug-26', priceCNY: 167940 },
-        { contract: 'LC2609', month: 'Sep-26', priceCNY: 168320 },
-        { contract: 'LC2610', month: 'Oct-26', priceCNY: 169280 },
-        { contract: 'LC2611', month: 'Nov-26', priceCNY: 169980 },
-        { contract: 'LC2612', month: 'Dec-26', priceCNY: 169980 },
-        { contract: 'LC2701', month: 'Jan-27', priceCNY: 170000 },
+        { contract: 'LC2602', month: 'Feb-26', priceCNY: 166500 },
+        { contract: 'LC2603', month: 'Mar-26', priceCNY: 167460 },
+        { contract: 'LC2604', month: 'Apr-26', priceCNY: 168620 },
+        { contract: 'LC2605', month: 'May-26', priceCNY: 168780 },
+        { contract: 'LC2606', month: 'Jun-26', priceCNY: 168660 },
+        { contract: 'LC2607', month: 'Jul-26', priceCNY: 169780 },
+        { contract: 'LC2608', month: 'Aug-26', priceCNY: 170360 },
+        { contract: 'LC2609', month: 'Sep-26', priceCNY: 170120 },
+        { contract: 'LC2610', month: 'Oct-26', priceCNY: 170320 },
+        { contract: 'LC2611', month: 'Nov-26', priceCNY: 171420 },
+        { contract: 'LC2612', month: 'Dec-26', priceCNY: 172000 },
+        { contract: 'LC2701', month: 'Jan-27', priceCNY: 170260 },
     ],
 };
 

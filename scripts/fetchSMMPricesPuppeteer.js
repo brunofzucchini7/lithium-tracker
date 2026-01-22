@@ -5,9 +5,13 @@
  * Targeting specific "VAT included" (USD) and "Original" (CNY) prices.
  */
 
-const fs = require('fs');
-const path = require('path');
-const puppeteer = require('puppeteer');
+import fs from 'fs';
+import path from 'path';
+import puppeteer from 'puppeteer';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const API_FILE = path.join(__dirname, '..', 'api', 'prices.js');
 const SMM_URL = 'https://www.metal.com/Lithium';
@@ -26,132 +30,130 @@ async function fetchPrices() {
         console.log(`📡 Navigating to ${SMM_URL}...`);
         await page.goto(SMM_URL, { waitUntil: 'networkidle2', timeout: 60000 });
 
-        // Extract Data
-        const data = await page.evaluate(() => {
-            const result = {
-                carbonate: { price: null, changeUSD: null, changePercent: null, priceCNY: null, changeCNY: null },
-                spodumene: { price: null, changeUSD: null, changePercent: null },
-                futures: []
-            };
+        // Debug: Dump page content
+        const pageText = await page.evaluate(() => document.body.innerText);
+        fs.writeFileSync('debug_page.txt', pageText);
+        console.log('📝 Saved page text to debug_page.txt');
 
-            const debug = [];
+        // Helper to parse numbers
+        const parseNum = (str) => {
+            if (!str) return null;
+            const clean = str.replace(/[^\d.-]/g, '');
+            return parseFloat(clean);
+        };
 
-            // Helper to parse numbers like "22,703.83" or "+859.45"
-            const parseNum = (str) => {
-                if (!str) return null;
-                const clean = str.replace(/[^\d.-]/g, '');
-                return parseFloat(clean);
-            };
+        const result = {
+            carbonate: { price: null, changeUSD: null, changePercent: null, priceCNY: null, changeCNY: null },
+            spodumene: { price: null, changeUSD: null, changePercent: null },
+            futures: []
+        };
 
-            // 1. Find Price Cards (VAT included / Original)
-            // We look for elements containing specific label text
-            const allElements = Array.from(document.querySelectorAll('div, span, p, h3, h4, h5, h6'));
+        // 1. Get initial text (Carbonate + Futures)
+        let text = await page.evaluate(() => document.body.innerText);
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
-            allElements.forEach(el => {
-                const text = el.innerText ? el.innerText.trim() : '';
+        // Parse Carbonate
+        // Look for "Battery-Grade Lithium Carbonate (USD/mt)"
+        // Structure: Title, Range, Price, Change
+        const carbIndex = lines.findIndex(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('USD/mt'));
+        console.log(`🔍 Carbonate Index: ${carbIndex}`);
 
-                // Carbonate Detection
-                // We assume Carbonate cards are near a "Lithium Carbonate" header, but identifying that relation across DOM is hard without structure
-                // However, "Original 158,500" is very unique to Carbonate. "VAT included" might appear for Spodumene too.
-                // To distinguish, we need to check if we are in the "Lithium Carbonate" section or "Spodumene" section.
-                // Heuristic: check if any parent or nearby element mentions the product name.
+        if (carbIndex !== -1) {
+            // Lines[carbIndex] = Title
+            // Lines[carbIndex+1] = Range (e.g. 20,411.72-21,299.18)
+            // Lines[carbIndex+2] = Price (e.g. 20,855.45)
+            // Lines[carbIndex+3] = Change (e.g. 763.56)
 
-                // A safer, more generic approach: Look for row/card structure
-                // Let's iterate over parents that have text content
+            console.log(`Values found: ${lines[carbIndex + 2]}, ${lines[carbIndex + 3]}`);
 
-                // CARBONATE LOGIC (Targeting specific text)
-                if (text === 'VAT included') {
-                    const container = el.parentElement;
-                    if (container) {
-                        const fullText = container.innerText; // "VAT included 22,703.83 USD/mt +859.45(+3.93%)"
+            const price = parseNum(lines[carbIndex + 2]);
+            const change = parseNum(lines[carbIndex + 3]);
 
-                        // Check if this card belongs to Carbonate or Spodumene
-                        // We treat Carbonate as the primary one found first usually, or we check price range
-                        const priceMatch = fullText.match(/([\d,]+\.?\d*)\s*USD\/mt/);
+            if (price) {
+                result.carbonate.price = price;
+                result.carbonate.changeUSD = change;
+                // Calculate percent if not present (change / (price - change)) * 100
+                // Or just leave null, the frontend calculates it? 
+                // api/prices.js builds response using changeUSD.
 
-                        if (priceMatch && priceMatch[1]) {
-                            const val = parseNum(priceMatch[1]);
-                            // Carbonate ~10000-50000, Spodumene ~500-4000
-                            if (val > 10000) {
-                                // Carbonate
-                                result.carbonate.price = val;
-                                const changeMatch = fullText.match(/([+-][\d,]+\.?\d*)\(/);
-                                const percentMatch = fullText.match(/\(([+-]?[\d,]+\.?\d*)%\)/);
-                                if (changeMatch) result.carbonate.changeUSD = parseNum(changeMatch[1]);
-                                if (percentMatch) result.carbonate.changePercent = parseNum(percentMatch[1]);
-                            } else if (val < 5000) {
-                                // Spodumene
-                                result.spodumene.price = val;
-                                const changeMatch = fullText.match(/([+-][\d,]+\.?\d*)\(/);
-                                const percentMatch = fullText.match(/\(([+-]?[\d,]+\.?\d*)%\)/);
-                                if (changeMatch) result.spodumene.changeUSD = parseNum(changeMatch[1]);
-                                if (percentMatch) result.spodumene.changePercent = parseNum(percentMatch[1]);
-                            }
-                        }
-                    }
+                if (price && change) {
+                    const prev = price - change;
+                    result.carbonate.changePercent = (change / prev) * 100;
                 }
-
-                // CARBONATE CNY (Original)
-                if (text === 'Original') {
-                    const container = el.parentElement;
-                    if (container) {
-                        const fullText = container.innerText; // "Original 158,500 CNY/mt +6,000(+3.93%)"
-
-                        const priceMatch = fullText.match(/([\d,]+\.?\d*)\s*CNY\/mt/);
-                        if (priceMatch && priceMatch[1]) {
-                            const val = parseNum(priceMatch[1]);
-                            if (val > 100000) {
-                                result.carbonate.priceCNY = val;
-                                const changeMatch = fullText.match(/([+-][\d,]+\.?\d*)\(/);
-                                if (changeMatch) result.carbonate.changeCNY = parseNum(changeMatch[1]);
-                            }
-                        }
-                    }
-                }
-            });
-
-            // 2. Fallback: Table Scanning
-            if (!result.carbonate.price || !result.spodumene.price) {
-                const rows = Array.from(document.querySelectorAll('tr'));
-                rows.forEach(row => {
-                    const rowText = row.innerText.toLowerCase();
-                    if (rowText.includes('lithium carbonate') && rowText.includes('99.5')) {
-                        const cells = Array.from(row.querySelectorAll('td'));
-                        cells.forEach(cell => {
-                            const val = parseNum(cell.innerText);
-                            if (val > 100000) result.carbonate.priceCNY = val;
-                            else if (val > 10000 && val < 50000) result.carbonate.price = val;
-                        });
-                    }
-                    if (rowText.includes('spodumene') && rowText.includes('6')) {
-                        const cells = Array.from(row.querySelectorAll('td'));
-                        cells.forEach(cell => {
-                            const val = parseNum(cell.innerText);
-                            if (val > 500 && val < 5000) result.spodumene.price = val;
-                        });
-                    }
-                });
             }
+        }
 
-            // 3. Futures (LC Contracts)
-            const rows = Array.from(document.querySelectorAll('tr'));
-            rows.forEach(row => {
-                const rowText = row.innerText.toLowerCase();
-                if (rowText.match(/lc2\d{3}/)) {
-                    const cells = Array.from(row.querySelectorAll('td'));
-                    const contract = cells[0]?.innerText.trim();
-                    const price = parseNum(cells[1]?.innerText || '');
-                    if (contract && !isNaN(price)) {
-                        result.futures.push({ contract, priceCNY: price });
+        // Parse Futures
+        // Look for LCxxxx (CNY/mt)
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const match = line.match(/(LC\d{4}) \(CNY\/mt\)/);
+            if (match) {
+                const contract = match[1];
+                const priceCNY = parseNum(lines[i + 1]);
+                if (contract && priceCNY) {
+                    result.futures.push({ contract, priceCNY });
+                }
+            }
+        }
+
+        // 2. Click "Lithium Ore" to get Spodumene
+        console.log('⛏️ Clicking "Lithium Ore" tab...');
+        try {
+            const buttons = await page.$x("//div[contains(text(), 'Lithium Ore')]");
+            if (buttons.length > 0) {
+                const button = buttons[0];
+                await button.click();
+                // Wait for content to change/load. 
+                // We'll wait 2 seconds to be safe as networkidle might not trigger on simple tab switch
+                await new Promise(r => setTimeout(r, 3000));
+
+                // Get text again
+                text = await page.evaluate(() => document.body.innerText);
+                const oreLines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+                // Parse Spodumene
+                // Look for "Spodumene Concentrate (6%, CIF China)" or similiar
+                // "Spodumene Concentrate (USD/mt)" likely
+
+                // Since I don't know the EXACT text, I'll search for "Spodumene"
+                const spodIndex = oreLines.findIndex(l => l.includes('Spodumene Concentrate') && l.includes('USD'));
+
+                if (spodIndex !== -1) {
+                    // Assuming similar structure: Title, Range, Price, Change
+                    const price = parseNum(oreLines[spodIndex + 2]);
+                    const change = parseNum(oreLines[spodIndex + 3]);
+
+                    if (price) {
+                        result.spodumene.price = price;
+                        result.spodumene.changeUSD = change;
+                        if (price && change) {
+                            const prev = price - change;
+                            result.spodumene.changePercent = (change / prev) * 100;
+                        }
+                    }
+                } else {
+                    console.log('⚠️ Spodumene section not found in text after click');
+                    // Try finding just "Spodumene"
+                    const simpleIndex = oreLines.findIndex(l => l.includes('Spodumene') && l.includes('USD'));
+                    if (simpleIndex !== -1) {
+                        const price = parseNum(oreLines[simpleIndex + 2]);
+                        const change = parseNum(oreLines[simpleIndex + 3]);
+                        if (price) {
+                            result.spodumene.price = price;
+                            result.spodumene.changeUSD = change;
+                        }
                     }
                 }
-            });
+            } else {
+                console.log('⚠️ "Lithium Ore" tab not found');
+            }
+        } catch (e) {
+            console.error('⚠️ Error clicking Lithium Ore:', e);
+        }
 
-            return result;
-        });
-
-        console.log('📊 Extracted Data:', JSON.stringify(data, null, 2));
-        return data;
+        console.log('📊 Extracted Data:', JSON.stringify(result, null, 2));
+        return result;
 
     } catch (error) {
         console.error('❌ Error scraping:', error);
