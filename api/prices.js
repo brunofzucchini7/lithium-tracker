@@ -44,24 +44,24 @@ const CURRENT_PRICES = {
     ],
 };
 
-// Historical data for change calculations (Jan 21 Baseline)
+// Historical data for change calculations (Jan 21 Baseline - Official Settlements)
 const HISTORY = {
     date: '2026-01-21',
-    carbonate: { price: 22707.09 }, // Previous VAT included price
-    spodumene: { price: 2035 },
+    carbonate: { price: 22707.09 }, // (158,500 CNY / ~6.98)
+    spodumene: { price: 2035 },     // (Jan 20 baseline for +4.67% move)
     futures: [
-        { contract: 'LC2602', priceCNY: 160420 },
-        { contract: 'LC2603', priceCNY: 161400 },
-        { contract: 'LC2604', priceCNY: 162560 },
-        { contract: 'LC2605', priceCNY: 162720 },
-        { contract: 'LC2606', priceCNY: 162600 },
-        { contract: 'LC2607', priceCNY: 163720 },
-        { contract: 'LC2608', priceCNY: 164300 },
-        { contract: 'LC2609', priceCNY: 164060 },
-        { contract: 'LC2610', priceCNY: 164260 },
-        { contract: 'LC2611', priceCNY: 165360 },
-        { contract: 'LC2612', priceCNY: 165940 },
-        { contract: 'LC2701', priceCNY: 164200 },
+        { contract: 'LC2602', priceCNY: 164160 },
+        { contract: 'LC2603', priceCNY: 163540 },
+        { contract: 'LC2604', priceCNY: 164980 },
+        { contract: 'LC2605', priceCNY: 164580 },
+        { contract: 'LC2606', priceCNY: 164960 },
+        { contract: 'LC2607', priceCNY: 165200 },
+        { contract: 'LC2608', priceCNY: 165740 },
+        { contract: 'LC2609', priceCNY: 166080 },
+        { contract: 'LC2610', priceCNY: 166280 },
+        { contract: 'LC2611', priceCNY: 167500 },
+        { contract: 'LC2612', priceCNY: 167440 },
+        { contract: 'LC2701', priceCNY: 168520 },
     ]
 };
 
