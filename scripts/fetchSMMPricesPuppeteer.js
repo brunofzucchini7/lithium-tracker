@@ -53,35 +53,32 @@ async function fetchPrices() {
         const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
         // Parse Carbonate
-        // Look for "Battery-Grade Lithium Carbonate"
-        const carbIndex = lines.findIndex(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('USD/mt'));
-        console.log(`🔍 Carbonate Index: ${carbIndex}`);
+        // Look for "Battery-Grade Lithium Carbonate" - Avoid Index rows
+        const carbonateRow = lines.find(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('USD/mt') && !l.toLowerCase().includes('index'));
+        const carbIndex = lines.indexOf(carbonateRow);
+
+        console.log(`🔍 Carbonate Row Found: ${carbonateRow} at index ${carbIndex}`);
 
         if (carbIndex !== -1) {
             const price = parseNum(lines[carbIndex + 2]);
             const change = parseNum(lines[carbIndex + 3]);
 
             if (price) {
-                // Heuristic: If price is around 20k, it's likely VAT excluded. 
-                // We want VAT included (~23k). 1.13 multiplier for VAT in China.
+                // VAT Logic: If price < 22000, it's VAT excluded (~20.8k). We want included (~23.5k).
                 if (price < 22000) {
-                    console.log('⚠️ Detected VAT excluded price, converting to VAT included...');
+                    console.log(`⚠️ Applying VAT multiplier up to ${price}`);
                     result.carbonate.price = Math.round(price * 1.13 * 100) / 100;
-                    result.carbonate.changeUSD = Math.round(change * 1.13 * 100) / 100;
+                    result.carbonate.changeUSD = Math.round((change || 0) * 1.13 * 100) / 100;
                 } else {
                     result.carbonate.price = price;
                     result.carbonate.changeUSD = change;
-                }
-
-                if (result.carbonate.price && result.carbonate.changeUSD) {
-                    const prev = result.carbonate.price - result.carbonate.changeUSD;
-                    result.carbonate.changePercent = Math.round((result.carbonate.changeUSD / prev) * 100 * 100) / 100;
                 }
             }
         }
 
         // Try to find CNY (Original) price
-        const cnyIndex = lines.findIndex(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('CNY/mt'));
+        const cnyRow = lines.find(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('CNY/mt'));
+        const cnyIndex = lines.indexOf(cnyRow);
         if (cnyIndex !== -1) {
             result.carbonate.priceCNY = parseNum(lines[cnyIndex + 2]);
             result.carbonate.changeCNY = parseNum(lines[cnyIndex + 3]);
@@ -156,45 +153,40 @@ function updateFile(data) {
     if (!data) return;
 
     let content = fs.readFileSync(API_FILE, 'utf8');
+    const today = new Date().toISOString().split('T')[0];
     let updated = false;
 
-    // 1. ARCHIVE HISTORY
-    // Extract current date, carbonate price, spodumene price, and futures from CURRENT_PRICES
-    const currentPriceMatch = content.match(/const CURRENT_PRICES = \{(.*?)\};/s);
-    if (currentPriceMatch) {
-        const currentBlock = currentPriceMatch[1];
+    // 1. ARCHIVE HISTORY (Only once a day)
+    const dateMarkerMatch = content.match(/\/\/ LAST_SCRAPE_DATE: ([\d-]+)/);
+    const lastScrapeDate = dateMarkerMatch ? dateMarkerMatch[1] : '';
 
-        // Extract values using regex
-        const carbPrice = currentBlock.match(/carbonate: \{.*?price:\s*([\d.]+)/s)?.[1];
-        const spodPrice = currentBlock.match(/spodumene: \{.*?price:\s*([\d.]+)/s)?.[1];
-
-        // Extract all futures contracts and prices
+    if (lastScrapeDate !== today) {
+        console.log(`📅 Archiving prices from ${lastScrapeDate || 'unknown'} to HISTORY...`);
+        const carbPrice = content.match(/carbonate: \{.*?price:\s*([\d.]+)/s)?.[1];
+        const spodPrice = content.match(/spodumene: \{.*?price:\s*([\d.]+)/s)?.[1];
         const futuresRegex = /contract:\s*'([^']+)'.*?priceCNY:\s*(\d+)/sg;
-        const currentFutures = [];
+        const archivedFutures = [];
         let fMatch;
-        while ((fMatch = futuresRegex.exec(currentBlock)) !== null) {
-            currentFutures.push({ contract: fMatch[1], priceCNY: fMatch[2] });
+        while ((fMatch = futuresRegex.exec(content)) !== null) {
+            archivedFutures.push({ contract: fMatch[1], priceCNY: fMatch[2] });
         }
 
-        // Generate new HISTORY block
-        const historyDate = new Date().toISOString().split('T')[0];
-        let historyStr = `const HISTORY = {\n    date: '${historyDate}',\n`;
-        if (carbPrice) historyStr += `    carbonate: { price: ${carbPrice} },\n`;
-        if (spodPrice) historyStr += `    spodumene: { price: ${spodPrice} },\n`;
-        historyStr += `    futures: [\n`;
-        currentFutures.forEach(f => {
-            historyStr += `        { contract: '${f.contract}', priceCNY: ${f.priceCNY} },\n`;
-        });
-        historyStr += `    ]\n};`;
+        if (carbPrice) {
+            let historyStr = `const HISTORY = {\n    date: '${lastScrapeDate || '2026-01-21'}',\n`;
+            historyStr += `    carbonate: { price: ${carbPrice} },\n`;
+            historyStr += `    spodumene: { price: ${spodPrice || 2130} },\n`;
+            historyStr += `    futures: [\n`;
+            archivedFutures.forEach(f => { historyStr += `        { contract: '${f.contract}', priceCNY: ${f.priceCNY} },\n`; });
+            historyStr += `    ]\n};`;
 
-        // Replace history in file
-        content = content.replace(/const HISTORY = \{.*?\};/s, historyStr);
-        updated = true;
+            content = content.replace(/const HISTORY = \{.*?\};/s, historyStr);
+            if (dateMarkerMatch) content = content.replace(/\/\/ LAST_SCRAPE_DATE: [\d-]+/, `// LAST_SCRAPE_DATE: ${today}`);
+            updated = true;
+        }
     }
 
     // 2. UPDATE CURRENT PRICES
     const replaceInBlock = (blockName, key, value) => {
-        // Find the block and the key specifically within it
         const blockRegex = new RegExp(`(${blockName}:\\s*\\{[^}]*?${key}:\\s*)([\\d,.-]+)`, 's');
         if (blockRegex.test(content) && value !== null && value !== undefined) {
             content = content.replace(blockRegex, `$1${value}`);
@@ -202,19 +194,22 @@ function updateFile(data) {
         }
     };
 
-    // Carbonate
     if (data.carbonate.price) replaceInBlock('carbonate', 'price', data.carbonate.price);
     if (data.carbonate.priceCNY) replaceInBlock('carbonate', 'priceCNY', data.carbonate.priceCNY);
     if (data.carbonate.changeCNY !== null) replaceInBlock('carbonate', 'changeCNY', data.carbonate.changeCNY);
     if (data.carbonate.changeUSD !== null) replaceInBlock('carbonate', 'changeUSD', data.carbonate.changeUSD);
-    if (data.carbonate.changePercent !== null) replaceInBlock('carbonate', 'changePercent', data.carbonate.changePercent);
 
-    // Spodumene
+    // Percent calculation against baseline in file
+    const histCarbMatch = content.match(/const HISTORY = \{.*?carbonate: \{ price: ([\d.]+) \}/s);
+    if (histCarbMatch && data.carbonate.price) {
+        const prev = parseFloat(histCarbMatch[1]);
+        const pct = Math.round(((data.carbonate.price - prev) / prev) * 100 * 100) / 100;
+        replaceInBlock('carbonate', 'changePercent', pct);
+    }
+
     if (data.spodumene.price) replaceInBlock('spodumene', 'price', data.spodumene.price);
     if (data.spodumene.changeUSD !== null) replaceInBlock('spodumene', 'changeUSD', data.spodumene.changeUSD);
-    if (data.spodumene.changePercent !== null) replaceInBlock('spodumene', 'changePercent', data.spodumene.changePercent);
 
-    // Futures
     if (data.futures && data.futures.length > 0) {
         data.futures.forEach(f => {
             const updateRegex = new RegExp(`(contract:\\s*'${f.contract}'.*?priceCNY:\\s*)(\\d+)`, 's');

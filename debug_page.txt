@@ -218,16 +218,16 @@ Selected News
 RATIO & INDEX
 15 minutes delay
 Brent oil
-63.589
--0.941(-1.46%)
+63.322
+-1.208(-1.87%)
 Jan 23, 2026
 US Dollar Index&reg
-98.4331
--0.3402(-0.34%)
+98.3922
+-0.3811(-0.39%)
 Jan 23, 2026
 Offshore RMB HK
-6.9685
-+0.0097(+0.14%)
+6.9678
++0.009(+0.13%)
 Jan 23, 2026
 SMMI
 3,874

@@ -5,17 +5,17 @@
  */
 
 // Current prices - Update these with data from SMM and GFEX
-// Last Updated: Based on User Screenshots (Jan 21, 2026)
+// LAST_SCRAPE_DATE: 2026-01-22
 const CURRENT_PRICES = {
     carbonate: {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 23617.8   // SMM Spot USD (VAT included)
+        price: 23566.66   // SMM Spot USD (VAT included)
         priceCNY: 164500,  // SMM Spot CNY (Original)
         changeCNY: 6000,   // +6,000
-        changeUSD: 751.39 // +859.57
-        changePercent: 3.29 // +3.79%
+        changeUSD: 862.82 // +859.57
+        changePercent: 3.79 // +3.79%
         unit: 'USD/T',
     },
     spodumene: {
@@ -24,11 +24,10 @@ const CURRENT_PRICES = {
         grade: '6.0%',
         price: 2130,
         changeUSD: 95,     // Index Jan 22
-        changePercent: 4.67, // (95 / (2130 - 95)) * 100
+        changePercent: 4.67, // Calculated
         unit: 'USD/T',
         spotOnly: true,
     },
-    // GFEX Lithium Carbonate Futures - Futures Prices in CNY
     futures: [
         { contract: 'LC2602', month: 'Feb-26', priceCNY: 166500 },
         { contract: 'LC2603', month: 'Mar-26', priceCNY: 167460 },
@@ -45,24 +44,24 @@ const CURRENT_PRICES = {
     ],
 };
 
-// Historical data for change calculations (Updated automatically by scraper)
+// Historical data for change calculations (Jan 21 Baseline)
 const HISTORY = {
-    date: '2026-01-22',
-    carbonate: { price: 23566.66 },
-    spodumene: { price: 2130 },
+    date: '2026-01-21',
+    carbonate: { price: 22707.09 }, // Previous VAT included price
+    spodumene: { price: 2035 },
     futures: [
-        { contract: 'LC2602', priceCNY: 166500 },
-        { contract: 'LC2603', priceCNY: 167460 },
-        { contract: 'LC2604', priceCNY: 168620 },
-        { contract: 'LC2605', priceCNY: 168780 },
-        { contract: 'LC2606', priceCNY: 168660 },
-        { contract: 'LC2607', priceCNY: 169780 },
-        { contract: 'LC2608', priceCNY: 170360 },
-        { contract: 'LC2609', priceCNY: 170120 },
-        { contract: 'LC2610', priceCNY: 170320 },
-        { contract: 'LC2611', priceCNY: 171420 },
-        { contract: 'LC2612', priceCNY: 172000 },
-        { contract: 'LC2701', priceCNY: 170260 },
+        { contract: 'LC2602', priceCNY: 160420 },
+        { contract: 'LC2603', priceCNY: 161400 },
+        { contract: 'LC2604', priceCNY: 162560 },
+        { contract: 'LC2605', priceCNY: 162720 },
+        { contract: 'LC2606', priceCNY: 162600 },
+        { contract: 'LC2607', priceCNY: 163720 },
+        { contract: 'LC2608', priceCNY: 164300 },
+        { contract: 'LC2609', priceCNY: 164060 },
+        { contract: 'LC2610', priceCNY: 164260 },
+        { contract: 'LC2611', priceCNY: 165360 },
+        { contract: 'LC2612', priceCNY: 165940 },
+        { contract: 'LC2701', priceCNY: 164200 },
     ]
 };
 
@@ -81,31 +80,14 @@ function calculateChange(current, previous) {
 }
 
 function buildResponse(prices, history) {
-    const today = getTodayDate();
-    const hasValidHistory = history && history.date !== today;
     const conversionRate = calculateConversionRate(prices.carbonate);
 
-    // Calculate carbonate changes
-    let carbonateChange = prices.carbonate.changeUSD;
-    let carbonateChangePercent = prices.carbonate.changePercent;
+    // Calculate variations strictly against HISTORY
+    const carbChangeVal = history.carbonate?.price ? prices.carbonate.price - history.carbonate.price : prices.carbonate.changeUSD;
+    const carbChangePct = history.carbonate?.price ? calculateChange(prices.carbonate.price, history.carbonate.price) : prices.carbonate.changePercent;
 
-    if (carbonateChangePercent === undefined || carbonateChangePercent === null) {
-        if (hasValidHistory && history.carbonate?.price) {
-            carbonateChange = prices.carbonate.price - history.carbonate.price;
-            carbonateChangePercent = calculateChange(prices.carbonate.price, history.carbonate.price);
-        }
-    }
-
-    // Calculate spodumene changes
-    let spodumeneChange = prices.spodumene.changeUSD;
-    let spodumeneChangePercent = prices.spodumene.changePercent;
-
-    if (spodumeneChangePercent === undefined || spodumeneChangePercent === null) {
-        if (hasValidHistory && history.spodumene?.price) {
-            spodumeneChange = prices.spodumene.price - history.spodumene.price;
-            spodumeneChangePercent = calculateChange(prices.spodumene.price, history.spodumene.price);
-        }
-    }
+    const spodChangeVal = history.spodumene?.price ? prices.spodumene.price - history.spodumene.price : prices.spodumene.changeUSD;
+    const spodChangePct = history.spodumene?.price ? calculateChange(prices.spodumene.price, history.spodumene.price) : prices.spodumene.changePercent;
 
     // Build history map for futures
     const historyFuturesMap = new Map(
@@ -132,13 +114,13 @@ function buildResponse(prices, history) {
     return {
         carbonate: {
             ...prices.carbonate,
-            change: carbonateChange !== undefined ? Math.round(carbonateChange * 100) / 100 : null,
-            changePercent: carbonateChangePercent !== undefined ? Math.round(carbonateChangePercent * 100) / 100 : null,
+            change: Math.round(carbChangeVal * 100) / 100,
+            changePercent: Math.round(carbChangePct * 100) / 100,
         },
         spodumene: {
             ...prices.spodumene,
-            change: spodumeneChange !== undefined ? Math.round(spodumeneChange * 100) / 100 : null,
-            changePercent: spodumeneChangePercent !== undefined ? Math.round(spodumeneChangePercent * 100) / 100 : null,
+            change: Math.round(spodChangeVal * 100) / 100,
+            changePercent: Math.round(spodChangePct * 100) / 100,
         },
         futures: futuresUSD,
         conversionRate: Math.round(conversionRate * 10000) / 10000,
