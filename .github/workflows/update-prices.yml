@@ -3,7 +3,7 @@ name: Update SMM Prices Daily
 on:
   schedule:
     # Run at 8:00 AM Argentina time (11:00 UTC)
-    - cron: '0 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
