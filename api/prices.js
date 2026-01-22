@@ -11,11 +11,11 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 23566.66,   // SMM Spot USD (VAT included)
+        price: 23617.8   // SMM Spot USD (VAT included)
         priceCNY: 164500,  // SMM Spot CNY (Original)
         changeCNY: 6000,   // +6,000
-        changeUSD: 859.57, // +859.57
-        changePercent: 3.79, // +3.79%
+        changeUSD: 751.39 // +859.57
+        changePercent: 3.29 // +3.79%
         unit: 'USD/T',
     },
     spodumene: {
@@ -45,8 +45,26 @@ const CURRENT_PRICES = {
     ],
 };
 
-// In-memory history storage
-let priceHistory = null;
+// Historical data for change calculations (Updated automatically by scraper)
+const HISTORY = {
+    date: '2026-01-22',
+    carbonate: { price: 23566.66 },
+    spodumene: { price: 2130 },
+    futures: [
+        { contract: 'LC2602', priceCNY: 166500 },
+        { contract: 'LC2603', priceCNY: 167460 },
+        { contract: 'LC2604', priceCNY: 168620 },
+        { contract: 'LC2605', priceCNY: 168780 },
+        { contract: 'LC2606', priceCNY: 168660 },
+        { contract: 'LC2607', priceCNY: 169780 },
+        { contract: 'LC2608', priceCNY: 170360 },
+        { contract: 'LC2609', priceCNY: 170120 },
+        { contract: 'LC2610', priceCNY: 170320 },
+        { contract: 'LC2611', priceCNY: 171420 },
+        { contract: 'LC2612', priceCNY: 172000 },
+        { contract: 'LC2701', priceCNY: 170260 },
+    ]
+};
 
 function getTodayDate() {
     return new Date().toISOString().split('T')[0];
@@ -68,27 +86,21 @@ function buildResponse(prices, history) {
     const conversionRate = calculateConversionRate(prices.carbonate);
 
     // Calculate carbonate changes
-    // Use explicit changePercent if available (scraped), otherwise calculate
     let carbonateChange = prices.carbonate.changeUSD;
     let carbonateChangePercent = prices.carbonate.changePercent;
 
-    if (carbonateChangePercent === undefined) {
+    if (carbonateChangePercent === undefined || carbonateChangePercent === null) {
         if (hasValidHistory && history.carbonate?.price) {
             carbonateChange = prices.carbonate.price - history.carbonate.price;
             carbonateChangePercent = calculateChange(prices.carbonate.price, history.carbonate.price);
-        } else if (prices.carbonate.changeCNY) {
-            // Fallback: estimate percent from CNY change
-            const prevCNY = prices.carbonate.priceCNY - prices.carbonate.changeCNY;
-            carbonateChangePercent = (prices.carbonate.changeCNY / prevCNY) * 100;
-            carbonateChange = prices.carbonate.changeCNY / conversionRate;
         }
     }
 
     // Calculate spodumene changes
     let spodumeneChange = prices.spodumene.changeUSD;
-    let spodumeneChangePercent = prices.spodumene.changePercent; // If added later
+    let spodumeneChangePercent = prices.spodumene.changePercent;
 
-    if (spodumeneChangePercent === undefined) {
+    if (spodumeneChangePercent === undefined || spodumeneChangePercent === null) {
         if (hasValidHistory && history.spodumene?.price) {
             spodumeneChange = prices.spodumene.price - history.spodumene.price;
             spodumeneChangePercent = calculateChange(prices.spodumene.price, history.spodumene.price);
@@ -104,7 +116,7 @@ function buildResponse(prices, history) {
     const futuresUSD = prices.futures.map(f => {
         const priceUSD = Math.round(f.priceCNY / conversionRate);
         const historyPriceCNY = historyFuturesMap.get(f.contract);
-        const changePercent = hasValidHistory && historyPriceCNY
+        const changePercent = historyPriceCNY
             ? calculateChange(f.priceCNY, historyPriceCNY)
             : null;
 
@@ -142,17 +154,6 @@ export default function handler(req, res) {
 
     if (req.method === 'OPTIONS') return res.status(200).end();
 
-    if (req.method === 'POST' && req.query.action === 'save-history') {
-        priceHistory = {
-            date: getTodayDate(),
-            savedAt: new Date().toISOString(),
-            carbonate: { ...CURRENT_PRICES.carbonate },
-            spodumene: { ...CURRENT_PRICES.spodumene },
-            futures: CURRENT_PRICES.futures.map(f => ({ ...f })),
-        };
-        return res.status(200).json({ success: true, date: priceHistory.date });
-    }
-
-    const response = buildResponse(CURRENT_PRICES, priceHistory);
+    const response = buildResponse(CURRENT_PRICES, HISTORY);
     return res.status(200).json(response);
 }

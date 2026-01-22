@@ -158,6 +158,41 @@ function updateFile(data) {
     let content = fs.readFileSync(API_FILE, 'utf8');
     let updated = false;
 
+    // 1. ARCHIVE HISTORY
+    // Extract current date, carbonate price, spodumene price, and futures from CURRENT_PRICES
+    const currentPriceMatch = content.match(/const CURRENT_PRICES = \{(.*?)\};/s);
+    if (currentPriceMatch) {
+        const currentBlock = currentPriceMatch[1];
+
+        // Extract values using regex
+        const carbPrice = currentBlock.match(/carbonate: \{.*?price:\s*([\d.]+)/s)?.[1];
+        const spodPrice = currentBlock.match(/spodumene: \{.*?price:\s*([\d.]+)/s)?.[1];
+
+        // Extract all futures contracts and prices
+        const futuresRegex = /contract:\s*'([^']+)'.*?priceCNY:\s*(\d+)/sg;
+        const currentFutures = [];
+        let fMatch;
+        while ((fMatch = futuresRegex.exec(currentBlock)) !== null) {
+            currentFutures.push({ contract: fMatch[1], priceCNY: fMatch[2] });
+        }
+
+        // Generate new HISTORY block
+        const historyDate = new Date().toISOString().split('T')[0];
+        let historyStr = `const HISTORY = {\n    date: '${historyDate}',\n`;
+        if (carbPrice) historyStr += `    carbonate: { price: ${carbPrice} },\n`;
+        if (spodPrice) historyStr += `    spodumene: { price: ${spodPrice} },\n`;
+        historyStr += `    futures: [\n`;
+        currentFutures.forEach(f => {
+            historyStr += `        { contract: '${f.contract}', priceCNY: ${f.priceCNY} },\n`;
+        });
+        historyStr += `    ]\n};`;
+
+        // Replace history in file
+        content = content.replace(/const HISTORY = \{.*?\};/s, historyStr);
+        updated = true;
+    }
+
+    // 2. UPDATE CURRENT PRICES
     const replaceInBlock = (blockName, key, value) => {
         // Find the block and the key specifically within it
         const blockRegex = new RegExp(`(${blockName}:\\s*\\{[^}]*?${key}:\\s*)([\\d,.-]+)`, 's');
