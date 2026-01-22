@@ -11,11 +11,11 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 23566.66   // SMM Spot USD (VAT included)
+        price: 23566.66,   // SMM Spot USD (VAT included)
         priceCNY: 164500,  // SMM Spot CNY (Original)
         changeCNY: 6000,   // +6,000
-        changeUSD: 862.82 // +859.57
-        changePercent: 3.79 // +3.79%
+        changeUSD: 859.57, // +859.57
+        changePercent: 3.79, // +3.79%
         unit: 'USD/T',
     },
     spodumene: {
