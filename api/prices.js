@@ -11,20 +11,20 @@ const CURRENT_PRICES = {
         id: 'carbonate',
         name: 'LITHIUM CARBONATE',
         grade: '99.5%',
-        price: 20855.45,   // SMM Spot USD (Battery-Grade)
-        priceCNY: 158500,  // SMM Spot CNY (Original)
+        price: 23566.66,   // SMM Spot USD (VAT included)
+        priceCNY: 164500,  // SMM Spot CNY (Original)
         changeCNY: 6000,   // +6,000
-        changeUSD: 763.56, // +763.56
-        changePercent: 3.80, // +3.80%
+        changeUSD: 859.57, // +859.57
+        changePercent: 3.79, // +3.79%
         unit: 'USD/T',
     },
     spodumene: {
         id: 'spodumene',
         name: 'SPODUMENE CONCENTRATE',
         grade: '6.0%',
-        price: 2035,
-        changeUSD: 50,     // Scraped Jan 21
-        changePercent: 2.52, // Scraped Jan 21
+        price: 2130,
+        changeUSD: 95,     // Index Jan 22
+        changePercent: 4.67, // (95 / (2130 - 95)) * 100
         unit: 'USD/T',
         spotOnly: true,
     },

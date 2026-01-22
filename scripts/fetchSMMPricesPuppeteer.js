@@ -53,34 +53,38 @@ async function fetchPrices() {
         const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
         // Parse Carbonate
-        // Look for "Battery-Grade Lithium Carbonate (USD/mt)"
-        // Structure: Title, Range, Price, Change
+        // Look for "Battery-Grade Lithium Carbonate"
         const carbIndex = lines.findIndex(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('USD/mt'));
         console.log(`🔍 Carbonate Index: ${carbIndex}`);
 
         if (carbIndex !== -1) {
-            // Lines[carbIndex] = Title
-            // Lines[carbIndex+1] = Range (e.g. 20,411.72-21,299.18)
-            // Lines[carbIndex+2] = Price (e.g. 20,855.45)
-            // Lines[carbIndex+3] = Change (e.g. 763.56)
-
-            console.log(`Values found: ${lines[carbIndex + 2]}, ${lines[carbIndex + 3]}`);
-
             const price = parseNum(lines[carbIndex + 2]);
             const change = parseNum(lines[carbIndex + 3]);
 
             if (price) {
-                result.carbonate.price = price;
-                result.carbonate.changeUSD = change;
-                // Calculate percent if not present (change / (price - change)) * 100
-                // Or just leave null, the frontend calculates it? 
-                // api/prices.js builds response using changeUSD.
+                // Heuristic: If price is around 20k, it's likely VAT excluded. 
+                // We want VAT included (~23k). 1.13 multiplier for VAT in China.
+                if (price < 22000) {
+                    console.log('⚠️ Detected VAT excluded price, converting to VAT included...');
+                    result.carbonate.price = Math.round(price * 1.13 * 100) / 100;
+                    result.carbonate.changeUSD = Math.round(change * 1.13 * 100) / 100;
+                } else {
+                    result.carbonate.price = price;
+                    result.carbonate.changeUSD = change;
+                }
 
-                if (price && change) {
-                    const prev = price - change;
-                    result.carbonate.changePercent = (change / prev) * 100;
+                if (result.carbonate.price && result.carbonate.changeUSD) {
+                    const prev = result.carbonate.price - result.carbonate.changeUSD;
+                    result.carbonate.changePercent = Math.round((result.carbonate.changeUSD / prev) * 100 * 100) / 100;
                 }
             }
+        }
+
+        // Try to find CNY (Original) price
+        const cnyIndex = lines.findIndex(l => l.includes('Battery-Grade Lithium Carbonate') && l.includes('CNY/mt'));
+        if (cnyIndex !== -1) {
+            result.carbonate.priceCNY = parseNum(lines[cnyIndex + 2]);
+            result.carbonate.changeCNY = parseNum(lines[cnyIndex + 3]);
         }
 
         // Parse Futures
@@ -117,33 +121,18 @@ async function fetchPrices() {
                 // "Spodumene Concentrate (USD/mt)" likely
 
                 // Since I don't know the EXACT text, I'll search for "Spodumene"
-                const spodIndex = oreLines.findIndex(l => l.includes('Spodumene Concentrate') && l.includes('USD'));
-
+                const spodIndex = oreLines.findIndex(l => l.includes('Spodumene Concentrate Index') && l.includes('USD/mt'));
                 if (spodIndex !== -1) {
-                    // Assuming similar structure: Title, Range, Price, Change
                     const price = parseNum(oreLines[spodIndex + 2]);
                     const change = parseNum(oreLines[spodIndex + 3]);
-
                     if (price) {
                         result.spodumene.price = price;
                         result.spodumene.changeUSD = change;
-                        if (price && change) {
-                            const prev = price - change;
-                            result.spodumene.changePercent = (change / prev) * 100;
-                        }
+                        const prev = price - change;
+                        result.spodumene.changePercent = Math.round((change / prev) * 100 * 100) / 100;
                     }
                 } else {
                     console.log('⚠️ Spodumene section not found in text after click');
-                    // Try finding just "Spodumene"
-                    const simpleIndex = oreLines.findIndex(l => l.includes('Spodumene') && l.includes('USD'));
-                    if (simpleIndex !== -1) {
-                        const price = parseNum(oreLines[simpleIndex + 2]);
-                        const change = parseNum(oreLines[simpleIndex + 3]);
-                        if (price) {
-                            result.spodumene.price = price;
-                            result.spodumene.changeUSD = change;
-                        }
-                    }
                 }
             } else {
                 console.log('⚠️ "Lithium Ore" tab not found');
@@ -169,58 +158,26 @@ function updateFile(data) {
     let content = fs.readFileSync(API_FILE, 'utf8');
     let updated = false;
 
-    // Helper to replace values
-    const replaceValue = (key, value) => {
-        const regex = new RegExp(`${key}:\\s*-?[\\d,]+(\\.\\d+)?`);
-        if (regex.test(content) && value !== null && value !== undefined && !isNaN(value)) {
-            content = content.replace(regex, `${key}: ${value}`);
-            updated = true;
-        }
-    };
-
-    // Carbonate
-    if (data.carbonate.priceCNY) replaceValue('priceCNY', data.carbonate.priceCNY);
-    if (data.carbonate.price) replaceValue('price', data.carbonate.price);
-    if (data.carbonate.changeCNY !== null) replaceValue('changeCNY', data.carbonate.changeCNY);
-    if (data.carbonate.changeUSD !== null) replaceValue('changeUSD', data.carbonate.changeUSD);
-    if (data.carbonate.changePercent !== null) replaceValue('changePercent', data.carbonate.changePercent);
-
-    // Spodumene (We need to ensure these keys exist in the file first to be replaceable)
-    // We'll trust the current file structure has these keys roughly in place
-    // But wait, Spodumene block might have duplicate keys like 'price', 'changeUSD', etc.
-    // The regex above matches GLOBAL first occurence or specific context?
-    // It matches the first one found! This is bad if keys are duplicated.
-    // We need context-aware replacement.
-
-    // Better replacement strategy:
     const replaceInBlock = (blockName, key, value) => {
-        // Find the block:  blockName: { ... }
-        const blockRegex = new RegExp(`(${blockName}:\\s*\\{[^}]*?)(${key}:\\s*)([\\d,.-]+)`, 's');
+        // Find the block and the key specifically within it
+        const blockRegex = new RegExp(`(${blockName}:\\s*\\{[^}]*?${key}:\\s*)([\\d,.-]+)`, 's');
         if (blockRegex.test(content) && value !== null && value !== undefined) {
-            // content = content.replace(blockRegex, `$1${key}: ${value}`);
-            // The above is tricky with groups. Let's use a function replacer or simpler split
-            // Actually, let's just use exact match with enough context
-            // e.g. "spodumene: { ... price: 2035"
-
-            // Using a function to only replace inside the specific match
-            content = content.replace(blockRegex, (match, prefix, label, oldVal) => {
-                return `${prefix}${label}${value}`;
-            });
+            content = content.replace(blockRegex, `$1${value}`);
             updated = true;
         }
     };
 
     // Carbonate
-    replaceInBlock('carbonate', 'priceCNY', data.carbonate.priceCNY);
-    replaceInBlock('carbonate', 'price', data.carbonate.price);
-    replaceInBlock('carbonate', 'changeCNY', data.carbonate.changeCNY);
-    replaceInBlock('carbonate', 'changeUSD', data.carbonate.changeUSD);
-    replaceInBlock('carbonate', 'changePercent', data.carbonate.changePercent);
+    if (data.carbonate.price) replaceInBlock('carbonate', 'price', data.carbonate.price);
+    if (data.carbonate.priceCNY) replaceInBlock('carbonate', 'priceCNY', data.carbonate.priceCNY);
+    if (data.carbonate.changeCNY !== null) replaceInBlock('carbonate', 'changeCNY', data.carbonate.changeCNY);
+    if (data.carbonate.changeUSD !== null) replaceInBlock('carbonate', 'changeUSD', data.carbonate.changeUSD);
+    if (data.carbonate.changePercent !== null) replaceInBlock('carbonate', 'changePercent', data.carbonate.changePercent);
 
     // Spodumene
-    replaceInBlock('spodumene', 'price', data.spodumene.price);
-    replaceInBlock('spodumene', 'changeUSD', data.spodumene.changeUSD);
-    replaceInBlock('spodumene', 'changePercent', data.spodumene.changePercent);
+    if (data.spodumene.price) replaceInBlock('spodumene', 'price', data.spodumene.price);
+    if (data.spodumene.changeUSD !== null) replaceInBlock('spodumene', 'changeUSD', data.spodumene.changeUSD);
+    if (data.spodumene.changePercent !== null) replaceInBlock('spodumene', 'changePercent', data.spodumene.changePercent);
 
     // Futures
     if (data.futures && data.futures.length > 0) {
