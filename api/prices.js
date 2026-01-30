@@ -5,7 +5,7 @@
  */
 
 // Current prices - Update these with data from SMM and GFEX
-// LAST_SCRAPE_DATE: 2026-01-29
+// LAST_SCRAPE_DATE: 2026-01-30
 const CURRENT_PRICES = {
     carbonate: {
         id: 'carbonate',
@@ -29,27 +29,39 @@ const CURRENT_PRICES = {
         spotOnly: true,
     },
     futures: [
-        { contract: 'LC2602', month: 'Feb-26', priceCNY: 162140 },
-        { contract: 'LC2603', month: 'Mar-26', priceCNY: 163120 },
-        { contract: 'LC2604', month: 'Apr-26', priceCNY: 165080 },
-        { contract: 'LC2605', month: 'May-26', priceCNY: 164820 },
-        { contract: 'LC2606', month: 'Jun-26', priceCNY: 166020 },
-        { contract: 'LC2607', month: 'Jul-26', priceCNY: 165580 },
-        { contract: 'LC2608', month: 'Aug-26', priceCNY: 165940 },
-        { contract: 'LC2609', month: 'Sep-26', priceCNY: 166240 },
-        { contract: 'LC2610', month: 'Oct-26', priceCNY: 165640 },
-        { contract: 'LC2611', month: 'Nov-26', priceCNY: 165600 },
-        { contract: 'LC2612', month: 'Dec-26', priceCNY: 166480 },
-        { contract: 'LC2701', month: 'Jan-27', priceCNY: 167500 },
+        { contract: 'LC2602', month: 'Feb-26', priceCNY: 149760 },
+        { contract: 'LC2603', month: 'Mar-26', priceCNY: 149820 },
+        { contract: 'LC2604', month: 'Apr-26', priceCNY: 150340 },
+        { contract: 'LC2605', month: 'May-26', priceCNY: 150100 },
+        { contract: 'LC2606', month: 'Jun-26', priceCNY: 151040 },
+        { contract: 'LC2607', month: 'Jul-26', priceCNY: 150320 },
+        { contract: 'LC2608', month: 'Aug-26', priceCNY: 150640 },
+        { contract: 'LC2609', month: 'Sep-26', priceCNY: 150180 },
+        { contract: 'LC2610', month: 'Oct-26', priceCNY: 149500 },
+        { contract: 'LC2611', month: 'Nov-26', priceCNY: 150620 },
+        { contract: 'LC2612', month: 'Dec-26', priceCNY: 149760 },
+        { contract: 'LC2701', month: 'Jan-27', priceCNY: 150040 },
     ],
 };
 
 // Historical data for change calculations (Jan 21 Baseline - Official Settlements)
 const HISTORY = {
-    date: '2026-01-28',
+    date: '2026-01-29',
     carbonate: { price: 23033.49 },
     spodumene: { price: 2130 },
     futures: [
+        { contract: 'LC2602', priceCNY: 162140 },
+        { contract: 'LC2603', priceCNY: 163120 },
+        { contract: 'LC2604', priceCNY: 165080 },
+        { contract: 'LC2605', priceCNY: 164820 },
+        { contract: 'LC2606', priceCNY: 166020 },
+        { contract: 'LC2607', priceCNY: 165580 },
+        { contract: 'LC2608', priceCNY: 165940 },
+        { contract: 'LC2609', priceCNY: 166240 },
+        { contract: 'LC2610', priceCNY: 165640 },
+        { contract: 'LC2611', priceCNY: 165600 },
+        { contract: 'LC2612', priceCNY: 166480 },
+        { contract: 'LC2701', priceCNY: 167500 },
         { contract: 'LC2602', priceCNY: 166000 },
         { contract: 'LC2603', priceCNY: 166060 },
         { contract: 'LC2604', priceCNY: 166420 },
