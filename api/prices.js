@@ -5,7 +5,7 @@
  */
 
 // Current prices - Update these with data from SMM and GFEX
-// LAST_SCRAPE_DATE: 2026-01-30
+// LAST_SCRAPE_DATE: 2026-01-31
 const CURRENT_PRICES = {
     carbonate: {
         id: 'carbonate',
@@ -46,10 +46,22 @@ const CURRENT_PRICES = {
 
 // Historical data for change calculations (Jan 21 Baseline - Official Settlements)
 const HISTORY = {
-    date: '2026-01-29',
+    date: '2026-01-30',
     carbonate: { price: 23033.49 },
     spodumene: { price: 2130 },
     futures: [
+        { contract: 'LC2602', priceCNY: 147220 },
+        { contract: 'LC2603', priceCNY: 148000 },
+        { contract: 'LC2604', priceCNY: 148100 },
+        { contract: 'LC2605', priceCNY: 148200 },
+        { contract: 'LC2606', priceCNY: 148180 },
+        { contract: 'LC2607', priceCNY: 148860 },
+        { contract: 'LC2608', priceCNY: 148200 },
+        { contract: 'LC2609', priceCNY: 148560 },
+        { contract: 'LC2610', priceCNY: 148540 },
+        { contract: 'LC2611', priceCNY: 147100 },
+        { contract: 'LC2612', priceCNY: 149240 },
+        { contract: 'LC2701', priceCNY: 149400 },
         { contract: 'LC2602', priceCNY: 162140 },
         { contract: 'LC2603', priceCNY: 163120 },
         { contract: 'LC2604', priceCNY: 165080 },
